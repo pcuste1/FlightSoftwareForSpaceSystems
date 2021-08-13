@@ -3,7 +3,7 @@
 **
 ** Title:  Message ID Header File for APP_B Application
 **
-** $Author:    .
+** $Author:    Patrick Custer
 ** $Revision: 1.1 $
 ** $Date:      2021-07-10
 **
@@ -13,7 +13,7 @@
 ** Modification History:
 **   Date | Author | Description
 **   ---------------------------
-**   2021-07-10 | . | Build #: Code Started
+**   2021-07-10 | Patrick Custer | Build #: Code Started
 **
 **=====================================================================================*/
     
@@ -21,12 +21,12 @@
 #define _APP_B_MSGIDS_H_
 
 /***** TODO:  These Message ID values are default and may need to be changed by the developer  *****/
-#define APP_B_CMD_MID            	0x18C0
-#define APP_B_SEND_HK_MID        	0x18C1
-#define APP_B_WAKEUP_MID        	0x18D0
-#define APP_B_OUT_DATA_MID        	0x18D1
+#define APP_B_CMD_MID            	0x18E3
+#define APP_B_SEND_HK_MID        	0x18E4
+#define APP_B_WAKEUP_MID        	0x18F3
+#define APP_B_OUT_DATA_MID        	0x18F4
 
-#define APP_B_HK_TLM_MID		0x08BB
+#define APP_B_HK_TLM_MID		0x08BC
 
     
 

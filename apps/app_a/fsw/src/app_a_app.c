@@ -44,6 +44,7 @@
 #include "app_a_platform_cfg.h"
 #include "app_a_mission_cfg.h"
 #include "app_a_app.h"
+#include "app_b_msgids.h"
 
 /*
 ** Local Defines
@@ -246,6 +247,13 @@ int32 APP_A_InitPipe()
         if (iStatus != CFE_SUCCESS)
         {
             CFE_ES_WriteToSysLog("APP_A - CMD Pipe failed to subscribe to APP_A_SEND_HK_MID. (0x%08X)\n", iStatus);
+            goto APP_A_InitPipe_Exit_Tag;
+        }
+
+        iStatus  = CFE_SB_Subscribe(APP_B_OUT_DATA_MID, g_APP_A_AppData.CmdPipeId);
+        if (iStatus != CFE_SUCCESS)
+        {
+            CFE_ES_WriteToSysLog("APP_A - CMD Pipe failed to subscribe to APP_B_OUT_DATA_MID. (0x%08X)\n", iStatus);
             goto APP_A_InitPipe_Exit_Tag;
         }
         
@@ -666,6 +674,7 @@ void APP_A_ProcessNewData()
 **    CFE_EVS_SendEvent
 **    APP_A_ProcessNewAppCmds
 **    APP_A_ReportHousekeeping
+**    APP_A_ProcessAppBCmds
 **
 ** Called By:
 **    APP_A_RcvMsg
@@ -721,6 +730,9 @@ void APP_A_ProcessNewCmds()
                 **         APP_A_ProcessTimeDataCmd(CmdMsgPtr);
                 **         break;
                 */
+                case APP_B_OUT_DATA_MID:
+                    APP_A_ProcessAppBCmds(CmdMsgPtr);
+                    break;
 
                 default:
                     CFE_EVS_SendEvent(APP_A_MSGID_ERR_EID, CFE_EVS_ERROR,
@@ -805,6 +817,19 @@ void APP_A_ProcessNewAppCmds(CFE_SB_Msg_t* MsgPtr)
                 break;
 
             /* TODO:  Add code to process the rest of the APP_A commands here */
+            case APP_A_DEC_B:
+                g_APP_A_AppData.HkTlm.usCmdCnt++;
+                CFE_SB_SetCmdCode((CFE_SB_Msg_t*)&g_APP_A_AppData.OutData, APP_A_DEC_B);
+                CFE_EVS_SendEvent(APP_A_CMD_INF_EID, CFE_EVS_INFORMATION,
+                                  "APP_A - Recvd Decrement APP_B cmd (%d)", uiCmdCode);
+                break;
+
+            case APP_A_INC_B:
+                g_APP_A_AppData.HkTlm.usCmdCnt++;
+                CFE_SB_SetCmdCode((CFE_SB_Msg_t*)&g_APP_A_AppData.OutData, APP_A_INC_B);
+                CFE_EVS_SendEvent(APP_A_CMD_INF_EID, CFE_EVS_INFORMATION,
+                                  "APP_A - Recvd Increment APP_B cmd (%d)", uiCmdCode);
+                break;
 
             default:
                 g_APP_A_AppData.HkTlm.usCmdErrCnt++;
@@ -814,7 +839,7 @@ void APP_A_ProcessNewAppCmds(CFE_SB_Msg_t* MsgPtr)
         }
     }
 }
-    
+
 /*=====================================================================================
 ** Name: APP_A_ReportHousekeeping
 **
@@ -860,7 +885,79 @@ void APP_A_ReportHousekeeping()
     CFE_SB_TimeStampMsg((CFE_SB_Msg_t*)&g_APP_A_AppData.HkTlm);
     CFE_SB_SendMsg((CFE_SB_Msg_t*)&g_APP_A_AppData.HkTlm);
 }
-    
+
+/*=====================================================================================
+** Name: APP_A_ProcessAppBCmds
+**
+** Purpose: To process command messages originating from the APP_B application
+**
+** Arguments:
+**    CFE_SB_Msg_t*  MsgPtr - new command message pointer
+**
+** Returns:
+**    None
+**
+** Routines Called:
+**    CFE_SB_GetCmdCode
+**    CFE_EVS_SendEvent
+**
+** Called By:
+**    APP_A_ProcessNewCmds
+**
+** Global Inputs/Reads:
+**    None
+**
+** Global Outputs/Writes:
+**    g_APP_A_AppData.HkTlm.usCmdCnt
+**    g_APP_A_AppData.HkTlm.counter
+**
+** Limitations, Assumptions, External Events, and Notes:
+**   This function is triggered by the APP_B output pipeline
+**
+** Algorithm:
+**    Psuedo-code or description of basic algorithm
+**
+** Author(s):  Patrick Custer 
+**
+** History:  Date Written  2021-07-12
+**           Unit Tested   yyyy-mm-dd
+**=====================================================================================*/
+void APP_A_ProcessAppBCmds(CFE_SB_Msg_t* MsgPtr)
+{
+    uint32  uiCmdCode=0;
+
+    if (MsgPtr != NULL)
+    {
+        uiCmdCode = CFE_SB_GetCmdCode(MsgPtr);
+        switch (uiCmdCode)
+        {
+            case APP_A_NOOP_CC:
+                // this is a consistent cmd sent from APP_B, ignoring
+                break;
+
+            case APP_A_DEC:
+                g_APP_A_AppData.HkTlm.usCmdCnt++;
+                g_APP_A_AppData.HkTlm.counter--;
+                CFE_EVS_SendEvent(APP_A_CMD_INF_EID, CFE_EVS_INFORMATION,
+                                  "APP_A - Recvd Decrement cmd (%d)", uiCmdCode);
+                break;
+
+            case APP_A_INC:
+                g_APP_A_AppData.HkTlm.usCmdCnt++;
+                g_APP_A_AppData.HkTlm.counter++;
+                CFE_EVS_SendEvent(APP_A_CMD_INF_EID, CFE_EVS_INFORMATION,
+                                  "APP_A - Recvd Increment cmd (%d)", uiCmdCode);
+                break;
+
+            default:
+                g_APP_A_AppData.HkTlm.usCmdErrCnt++;
+                CFE_EVS_SendEvent(APP_A_MSGID_ERR_EID, CFE_EVS_ERROR,
+                                  "APP_A - Recvd invalid cmdId (%d)", uiCmdCode);
+                break;
+        }
+    }
+}
+
 /*=====================================================================================
 ** Name: APP_A_SendOutData
 **
@@ -903,8 +1000,9 @@ void APP_A_SendOutData()
 {
     /* TODO:  Add code to update output data, if needed, here.  */
 
-    CFE_SB_TimeStampMsg((CFE_SB_Msg_t*)&g_APP_A_AppData.OutData);
+    APP_A_ReportHousekeeping();
     CFE_SB_SendMsg((CFE_SB_Msg_t*)&g_APP_A_AppData.OutData);
+    CFE_SB_SetCmdCode((CFE_SB_Msg_t*)&g_APP_A_AppData.OutData, APP_A_NOOP_CC);
 }
     
 /*=====================================================================================

@@ -16,7 +16,7 @@
 
 #define WHE_CMD_MID         0x1882      /** < \brief WHE ground commands   */
 #define WHE_SEND_HK_MID     0x1883      /** < \brief WHE send housekeeping */
-#define WHE_1HZ_WAKEUP_MID  0x1884	/** < \brief WHE Wakeup            */
+#define WHE_1HZ_WAKEUP_MID  0x1884
 
 /* WHE telemetry packet message ID's */
 #define WHE_HK_TLM_MID		0x0883      /** < \brief WHE housekeeping */

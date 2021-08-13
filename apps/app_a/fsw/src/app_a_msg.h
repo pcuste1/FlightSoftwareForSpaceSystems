@@ -40,6 +40,16 @@
 #define APP_A_RESET_CC                1
 
 /*
+** The following enums map directly with app_a_msg since
+** it is not importable 
+*/
+#define APP_A_DEC                     2
+#define APP_A_INC                     3
+#define APP_A_DEC_B                   4
+#define APP_A_INC_B                   5
+#define APP_A_RESET_COUNTER           6
+
+/*
 ** Local Structure Declarations
 */
 typedef struct
@@ -49,7 +59,7 @@ typedef struct
     uint8              usCmdErrCnt;
 
     /* TODO:  Add declarations for additional housekeeping data here */
-
+    uint32             counter;
 } APP_A_HkTlm_t;
 
 

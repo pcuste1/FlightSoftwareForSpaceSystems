@@ -71,7 +71,7 @@
 # Having an absolute path would be necessary for including this file in a
 # shared login script.
 #
-export CFS_MISSION=`pwd`
+export CFS_MISSION=~/cfs
 
 #
 # Variable: APP_DIR

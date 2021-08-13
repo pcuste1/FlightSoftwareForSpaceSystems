@@ -5,7 +5,7 @@
 **
 ** $Author:    Patrick Custer
 ** $Revision: 1.1 $
-** $Date:      2021-07-10
+** $Date:      2021-07-12
 **
 ** Purpose:  This header file contains declartions and definitions of all APP_A's 
 **           platform-specific configurations.
@@ -13,7 +13,7 @@
 ** Modification History:
 **   Date | Author | Description
 **   ---------------------------
-**   2021-07-10 | Patrick Custer | Build #: Code Started
+**   2021-07-12 | Patrick Custer | Build #: Code Started
 **
 **=====================================================================================*/
     
@@ -26,7 +26,6 @@
 #define APP_A_SCH_PIPE_DEPTH  2
 #define APP_A_CMD_PIPE_DEPTH  10
 #define APP_A_TLM_PIPE_DEPTH  10
-
 
 /* TODO:  Add more platform configuration parameter definitions here, if necessary. */
 
