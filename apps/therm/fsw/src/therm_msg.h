@@ -37,6 +37,8 @@
 */
 #define THERM_NOOP_CC                 0
 #define THERM_RESET_CC                1
+#define WISE_HTR_TOGGLE_CC		      3
+#define WISE_LVR_TOGGLE_CC            4
 
 /*
 ** Local Structure Declarations

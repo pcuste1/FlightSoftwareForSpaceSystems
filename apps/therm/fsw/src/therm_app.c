@@ -710,12 +710,7 @@ void THERM_ProcessWiseData(CFE_SB_Msg_t* TlmMsgPtr)
     if (TlmMsgPtr != NULL)
     {
         WISE_HkTelemetryPkt = (WISE_HkTlm_t*) TlmMsgPtr;
-        
-        /**
-         * if the temperature is close to the minimum allowable 
-         * turn on an available heater. If no heaters are 
-         * available, close an open lovuer
-         */
+
         CFE_EVS_SendEvent(THERM_CMD_INF_EID, CFE_EVS_INFORMATION,
             "THEM - Recvd TLM from WISE: Current Temp = (%d)", WISE_HkTelemetryPkt->wiseTemp);
         CFE_EVS_SendEvent(THERM_CMD_INF_EID, CFE_EVS_INFORMATION,
@@ -727,61 +722,96 @@ void THERM_ProcessWiseData(CFE_SB_Msg_t* TlmMsgPtr)
         CFE_EVS_SendEvent(THERM_CMD_INF_EID, CFE_EVS_INFORMATION,
             "THEM - Recvd TLM from WISE: Current Louver B = (%d)", WISE_HkTelemetryPkt->wiseLvrB_State);
         
-        if (WISE_HkTelemetryPkt->wiseTemp <= 200)
+        switch(WISE_HkTelemetryPkt->wiseSbcState)
         {
-            if (WISE_HkTelemetryPkt->wiseHtrA_State == 0)
-            {
-                g_THERM_AppData.WISE_outData.target = 0;
-                CFE_SB_SetCmdCode((CFE_SB_Msg_t*)&g_THERM_AppData.WISE_outData, 3);
-            }
-            else if (WISE_HkTelemetryPkt->wiseHtrB_State == 0)
-            {
-                g_THERM_AppData.WISE_outData.target = 1;
-                CFE_SB_SetCmdCode((CFE_SB_Msg_t*)&g_THERM_AppData.WISE_outData, 3);
-            }
-            else if (WISE_HkTelemetryPkt->wiseLvrA_State == 1)
-            {
-                g_THERM_AppData.WISE_outData.target = 0;
-                CFE_SB_SetCmdCode((CFE_SB_Msg_t*)&g_THERM_AppData.WISE_outData, 4);
-            }
-            else if (WISE_HkTelemetryPkt->wiseLvrB_State == 1)
-            {
-                g_THERM_AppData.WISE_outData.target = 1;
-                CFE_SB_SetCmdCode((CFE_SB_Msg_t*)&g_THERM_AppData.WISE_outData, 4);
-            }
-        } 
-        /**
-         * if the temperature is close to the maximum allowable 
-         * turn off an active heather. If no heaters are active,
-         * open a closed louver
-         */
-        else if (WISE_HkTelemetryPkt->wiseTemp >= 440)
-        {
-            if (WISE_HkTelemetryPkt->wiseHtrA_State == 1)
-            {
-                g_THERM_AppData.WISE_outData.target = 0;
-                CFE_SB_SetCmdCode((CFE_SB_Msg_t*)&g_THERM_AppData.WISE_outData, 3);
-            }
-            else if (WISE_HkTelemetryPkt->wiseHtrA_State == 1)
-            {
-                g_THERM_AppData.WISE_outData.target = 1;
-                CFE_SB_SetCmdCode((CFE_SB_Msg_t*)&g_THERM_AppData.WISE_outData, 3);
-            }
-            else if (WISE_HkTelemetryPkt->wiseLvrA_State == 0)
-            {
-                g_THERM_AppData.WISE_outData.target = 0;
-                CFE_SB_SetCmdCode((CFE_SB_Msg_t*)&g_THERM_AppData.WISE_outData, 4);
-            }
-            else if (WISE_HkTelemetryPkt->wiseLvrB_State == 0)
-            {
-                g_THERM_AppData.WISE_outData.target = 1;
-                CFE_SB_SetCmdCode((CFE_SB_Msg_t*)&g_THERM_AppData.WISE_outData, 4);
-            }
+            case WISE_SBC_POWERED:
+                THERM_ManagePoweredTemperature(WISE_HkTelemetryPkt);
+                break;
+            case WISE_SBC_OBSERVING:
+                THERM_ManageObservingTemperature(WISE_HkTelemetryPkt);
+                break;
+            case WISE_SBC_OFF:
+            case WISE_SBC_ERROR:
+            default:
+                break;
         }
+    }
+}
 
-        CFE_SB_SendMsg((CFE_SB_Msg_t*)&g_THERM_AppData.WISE_outData);
+void THERM_ManagePoweredTemperature(WISE_HkTlm_t *WISE_HkTelemetryPkt)
+{
+    if (WISE_HkTelemetryPkt->wiseTemp <= POWERED_MINIMUM_TEMP)
+    {
+        THERM_RaiseInstrumentTemperature(WISE_HkTelemetryPkt);
+    } 
+    else if (WISE_HkTelemetryPkt->wiseTemp >= POWERED_MAXIMUM_TEMP)
+    {
+        THERM_LowerInstrumentTemperature(WISE_HkTelemetryPkt);
+    }
+}
+
+void THERM_ManageObservingTemperature(WISE_HkTlm_t *WISE_HkTelemetryPkt)
+{
+    if (WISE_HkTelemetryPkt->wiseTemp <= OBSERVING_MINIMUM_TEMP)
+    {
+        THERM_RaiseInstrumentTemperature(WISE_HkTelemetryPkt);
+    } 
+    else if (WISE_HkTelemetryPkt->wiseTemp >= OBSERVING_MAXIMUM_TEMP)
+    {
+        THERM_LowerInstrumentTemperature(WISE_HkTelemetryPkt);
+    } 
+}
+
+void THERM_RaiseInstrumentTemperature(WISE_HkTlm_t *WISE_HkTelemetryPkt)
+{
+    if (WISE_HkTelemetryPkt->wiseHtrA_State == WISE_HTR_OFF)
+    {
+        g_THERM_AppData.WISE_outData.target = WISE_HTR_A;
+        CFE_SB_SetCmdCode((CFE_SB_Msg_t*)&g_THERM_AppData.WISE_outData, WISE_HTR_TOGGLE_CC);
+    }
+    else if (WISE_HkTelemetryPkt->wiseHtrB_State == WISE_HTR_OFF)
+    {
+        g_THERM_AppData.WISE_outData.target = WISE_HTR_B;
+        CFE_SB_SetCmdCode((CFE_SB_Msg_t*)&g_THERM_AppData.WISE_outData, WISE_HTR_TOGGLE_CC);
+    }
+    else if (WISE_HkTelemetryPkt->wiseLvrA_State == WISE_LVR_OPEN)
+    {
+        g_THERM_AppData.WISE_outData.target = WISE_LVR_A;
+        CFE_SB_SetCmdCode((CFE_SB_Msg_t*)&g_THERM_AppData.WISE_outData, WISE_LVR_TOGGLE_CC);
+    }
+    else if (WISE_HkTelemetryPkt->wiseLvrB_State == WISE_LVR_OPEN)
+    {
+        g_THERM_AppData.WISE_outData.target = WISE_LVR_B;
+        CFE_SB_SetCmdCode((CFE_SB_Msg_t*)&g_THERM_AppData.WISE_outData, WISE_LVR_TOGGLE_CC);
     }
 
+    CFE_SB_SendMsg((CFE_SB_Msg_t*)&g_THERM_AppData.WISE_outData);
+}
+
+void THERM_LowerInstrumentTemperature(WISE_HkTlm_t *WISE_HkTelemetryPkt)
+{
+    if (WISE_HkTelemetryPkt->wiseHtrA_State == WISE_HTR_ON)
+    {
+        g_THERM_AppData.WISE_outData.target = WISE_HTR_A;
+        CFE_SB_SetCmdCode((CFE_SB_Msg_t*)&g_THERM_AppData.WISE_outData, WISE_HTR_TOGGLE_CC);
+    }
+    else if (WISE_HkTelemetryPkt->wiseHtrA_State == WISE_HTR_ON)
+    {
+        g_THERM_AppData.WISE_outData.target = WISE_HTR_B;
+        CFE_SB_SetCmdCode((CFE_SB_Msg_t*)&g_THERM_AppData.WISE_outData, WISE_HTR_TOGGLE_CC);
+    }
+    else if (WISE_HkTelemetryPkt->wiseLvrA_State == WISE_LVR_CLOSED)
+    {
+        g_THERM_AppData.WISE_outData.target = WISE_LVR_A;
+        CFE_SB_SetCmdCode((CFE_SB_Msg_t*)&g_THERM_AppData.WISE_outData, WISE_LVR_TOGGLE_CC);
+    }
+    else if (WISE_HkTelemetryPkt->wiseLvrB_State == WISE_LVR_CLOSED)
+    {
+        g_THERM_AppData.WISE_outData.target = WISE_LVR_B;
+        CFE_SB_SetCmdCode((CFE_SB_Msg_t*)&g_THERM_AppData.WISE_outData, WISE_LVR_TOGGLE_CC);
+    }
+
+    CFE_SB_SendMsg((CFE_SB_Msg_t*)&g_THERM_AppData.WISE_outData);
 }
 
 /*=====================================================================================

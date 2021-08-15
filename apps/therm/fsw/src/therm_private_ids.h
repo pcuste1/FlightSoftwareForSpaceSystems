@@ -59,6 +59,31 @@
 ** External Global Variables
 */
 
+#define POWERED_MINIMUM_TEMP 50 // 5 degrees
+#define POWERED_MAXIMUM_TEMP 400 // 40 degrees
+
+#define OBSERVING_MINIMUM_TEMP 200 // 20 degrees
+#define OBSERVING_MAXIMUM_TEMP 250 // 25 degrees
+
+#define HTR_
+
+#define WISE_HTR_A (0)
+#define WISE_HTR_B (1)
+
+#define WISE_HTR_ON  (0)
+#define WISE_HTR_OFF (1)
+
+#define WISE_LVR_A (0)
+#define WISE_LVR_B (1)
+
+#define WISE_LVR_OPEN   (0)
+#define WISE_LVR_CLOSED (1)
+
+#define WISE_SBC_OFF       (0)
+#define WISE_SBC_POWERED   (1)
+#define WISE_SBC_OBSERVING (2)
+#define WISE_SBC_ERROR     (3)
+
 /*
 ** Global Variables
 */
