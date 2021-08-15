@@ -42,8 +42,8 @@
 /* #include "mm_msgids.h"  */
 /* #include "sc_msgids.h"  */
 #include "whe_msgids.h"
-#include "app_a_msgids.h"
-#include "app_b_msgids.h"
+#include "wise_msgids.h"
+#include "therm_msgids.h"
 #include "sch_msgids.h"
 
 
@@ -174,10 +174,10 @@ SCH_MessageEntry_t SCH_DefaultMessageTable[SCH_MAX_MESSAGES] =
   { { CFE_MAKE_BIG16(SCH_UNUSED_MID) } },
     /* command ID #25 - WHE 1 Hz Wakeup */
   { { CFE_MAKE_BIG16(WHE_1HZ_WAKEUP_MID),       CFE_MAKE_BIG16(0xC000), CFE_MAKE_BIG16(0x0001), 0x0000  } },
-    /* command ID #26 - Wake up application APP_A*/
-  { { CFE_MAKE_BIG16(APP_A_WAKEUP_MID),         CFE_MAKE_BIG16(0xC000), CFE_MAKE_BIG16(0x0001), 0x0000  } },
-    /* command ID #27 - Wake up application APP_B*/
-  { { CFE_MAKE_BIG16(APP_B_WAKEUP_MID),         CFE_MAKE_BIG16(0xC000), CFE_MAKE_BIG16(0x0001), 0x0000  } },
+    /* command ID #26 - Wake up application THERM*/
+  { { CFE_MAKE_BIG16(THERM_WAKEUP_MID),         CFE_MAKE_BIG16(0xC000), CFE_MAKE_BIG16(0x0001), 0x0000  } },
+    /* command ID #27 */
+  { { CFE_MAKE_BIG16(WISE_WAKEUP_MID),          CFE_MAKE_BIG16(0xC000), CFE_MAKE_BIG16(0x0001), 0x0000  } },
     /* command ID #28 */
   { { CFE_MAKE_BIG16(SCH_UNUSED_MID) } },
     /* command ID #29 */
