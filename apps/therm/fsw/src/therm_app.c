@@ -1139,7 +1139,7 @@ void THERM_ReportHousekeeping()
 void THERM_SendOutData()
 {
     /* TODO:  Add code to update output data, if needed, here.  */
-
+    THERM_ReportHousekeeping();
     CFE_SB_TimeStampMsg((CFE_SB_Msg_t*)&g_THERM_AppData.OutData);
     CFE_SB_SendMsg((CFE_SB_Msg_t*)&g_THERM_AppData.OutData);
 }
