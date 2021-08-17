@@ -50,6 +50,14 @@ typedef struct
     uint8              usCmdErrCnt;
 
     /* TODO:  Add declarations for additional housekeeping data here */
+    uint16              currentMaxTemp;
+    uint16              currentMinTemp;
+    uint8               wiseMessageCount;
+    uint8               wiseActiveCapacitorCharge;
+    uint8               waitTicks;
+    int8                wisePrevTemp;
+    int8                wiseTempChange;
+    int8                wiseTempState;
 
 } THERM_HkTlm_t;
 
@@ -82,6 +90,7 @@ typedef struct
     uint16				wiseLvrB_State;
     uint16              wiseSSR_Count;
     int16				wiseTemp;
+
 } WISE_HkTlm_t;
 
 #endif /* _THERM_MSG_H_ */
