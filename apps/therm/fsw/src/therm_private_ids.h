@@ -60,12 +60,10 @@
 */
 
 #define POWERED_MINIMUM_TEMP 50 // 5 degrees
-#define POWERED_MAXIMUM_TEMP 400 // 40 degrees
+#define POWERED_MAXIMUM_TEMP 350 // 35 degrees
 
 #define OBSERVING_MINIMUM_TEMP 200 // 20 degrees
 #define OBSERVING_MAXIMUM_TEMP 250 // 25 degrees
-
-#define HTR_
 
 #define WISE_HTR_A (0)
 #define WISE_HTR_B (1)
@@ -84,6 +82,10 @@
 #define WISE_SBC_OBSERVING (2)
 #define WISE_SBC_ERROR     (3)
 
+#define WISE_CAP_A 0
+#define WISE_CAP_B 1
+#define WISE_CAP_C 2
+
 /*
 ** Global Variables
 */
@@ -91,6 +93,12 @@
 /*
 ** Local Variables
 */
+
+#define COOLING 0
+#define STABLE  1
+#define HEATING 1
+
+#define WAIT_BETWEEN_ACTION 1
 
 /*
 ** Local Function Prototypes
