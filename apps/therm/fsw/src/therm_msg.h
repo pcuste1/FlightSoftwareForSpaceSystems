@@ -52,12 +52,12 @@ typedef struct
     /* TODO:  Add declarations for additional housekeeping data here */
     uint16              currentMaxTemp;
     uint16              currentMinTemp;
-    uint8               wiseMessageCount;
-    uint8               wiseActiveCapacitorCharge;
-    uint8               waitTicks;
-    int8                wisePrevTemp;
-    int8                wiseTempChange;
-    int8                wiseTempState;
+    uint16               wiseMessageCount;
+    uint16               wiseActiveCapacitorCharge;
+    uint16               waitTicks;
+    int16                wisePrevTemp;
+    int16                wiseTempChange;
+    int16                wiseTempState;
 
 } THERM_HkTlm_t;
 
