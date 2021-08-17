@@ -350,7 +350,7 @@ int32 THERM_InitData()
     CFE_SB_InitMsg(&g_THERM_AppData.HkTlm,
                    THERM_HK_TLM_MID, sizeof(g_THERM_AppData.HkTlm), TRUE);
 
-    /* */
+    /* WISE input data*/
     memset((void*)&g_THERM_AppData.WISE_outData, 0x00, sizeof(g_THERM_AppData.WISE_outData));
     CFE_SB_InitMsg(&g_THERM_AppData.WISE_outData,
                    WISE_CMD_MID, sizeof(g_THERM_AppData.WISE_outData), TRUE);
@@ -644,6 +644,7 @@ void THERM_ProcessNewData()
                 **         break;
                 */
                 case WISE_HK_TLM_MID:
+                    g_THERM_AppData.HkTlm.wiseMessageCount += 1;
                     THERM_ProcessWiseData(TlmMsgPtr);
                     break;
 
@@ -711,24 +712,20 @@ void THERM_ProcessWiseData(CFE_SB_Msg_t* TlmMsgPtr)
     {
         WISE_HkTelemetryPkt = (WISE_HkTlm_t*) TlmMsgPtr;
 
-        CFE_EVS_SendEvent(THERM_CMD_INF_EID, CFE_EVS_INFORMATION,
-            "THEM - Recvd TLM from WISE: Current Temp = (%d)", WISE_HkTelemetryPkt->wiseTemp);
-        CFE_EVS_SendEvent(THERM_CMD_INF_EID, CFE_EVS_INFORMATION,
-            "THEM - Recvd TLM from WISE: Current Heater A = (%d)", WISE_HkTelemetryPkt->wiseHtrA_State);
-        CFE_EVS_SendEvent(THERM_CMD_INF_EID, CFE_EVS_INFORMATION,
-            "THEM - Recvd TLM from WISE: Current Heater B = (%d)", WISE_HkTelemetryPkt->wiseHtrB_State);
-        CFE_EVS_SendEvent(THERM_CMD_INF_EID, CFE_EVS_INFORMATION,
-            "THEM - Recvd TLM from WISE: Current Louver A = (%d)", WISE_HkTelemetryPkt->wiseLvrA_State);
-        CFE_EVS_SendEvent(THERM_CMD_INF_EID, CFE_EVS_INFORMATION,
-            "THEM - Recvd TLM from WISE: Current Louver B = (%d)", WISE_HkTelemetryPkt->wiseLvrB_State);
-        
+        THERM_DetermineTemperatureState(WISE_HkTelemetryPkt);
+        THERM_DetermineCurrentTempBounds(WISE_HkTelemetryPkt);
+
+        if (g_THERM_AppData.HkTlm.waitTicks > 0)
+        {
+            g_THERM_AppData.HkTlm.waitTicks -= 1;
+            return;
+        }
+
         switch(WISE_HkTelemetryPkt->wiseSbcState)
         {
             case WISE_SBC_POWERED:
-                THERM_ManagePoweredTemperature(WISE_HkTelemetryPkt);
-                break;
             case WISE_SBC_OBSERVING:
-                THERM_ManageObservingTemperature(WISE_HkTelemetryPkt);
+                THERM_ManageTemperature(WISE_HkTelemetryPkt);
                 break;
             case WISE_SBC_OFF:
             case WISE_SBC_ERROR:
@@ -738,80 +735,155 @@ void THERM_ProcessWiseData(CFE_SB_Msg_t* TlmMsgPtr)
     }
 }
 
-void THERM_ManagePoweredTemperature(WISE_HkTlm_t *WISE_HkTelemetryPkt)
+void THERM_DetermineTemperatureState(WISE_HkTlm_t *WISE_HkTelemetryPkt)
 {
-    if (WISE_HkTelemetryPkt->wiseTemp <= POWERED_MINIMUM_TEMP)
+    g_THERM_AppData.HkTlm.wiseTempChange = WISE_HkTelemetryPkt->wiseTemp - g_THERM_AppData.HkTlm.wisePrevTemp;
+
+    if (g_THERM_AppData.HkTlm.wiseTempChange < 0)
     {
-        THERM_RaiseInstrumentTemperature(WISE_HkTelemetryPkt);
-    } 
-    else if (WISE_HkTelemetryPkt->wiseTemp >= POWERED_MAXIMUM_TEMP)
+        g_THERM_AppData.HkTlm.wiseTempState = COOLING;
+    }
+    else if (g_THERM_AppData.HkTlm.wiseTempChange == 0)
     {
-        THERM_LowerInstrumentTemperature(WISE_HkTelemetryPkt);
+        g_THERM_AppData.HkTlm.wiseTempState = STABLE;
+    }
+    else
+    {
+        g_THERM_AppData.HkTlm.wiseTempState = HEATING;
+    }
+    g_THERM_AppData.HkTlm.wisePrevTemp = WISE_HkTelemetryPkt->wiseTemp;
+}
+
+void THERM_DetermineCurrentTempBounds(WISE_HkTlm_t *WISE_HkTelemetryPkt)
+{
+    switch(WISE_HkTelemetryPkt->wiseSbcState)
+    {
+        case WISE_SBC_POWERED:
+            g_THERM_AppData.HkTlm.currentMinTemp = POWERED_MINIMUM_TEMP;
+            g_THERM_AppData.HkTlm.currentMaxTemp = POWERED_MAXIMUM_TEMP;
+            break;
+        case WISE_SBC_OBSERVING:
+            g_THERM_AppData.HkTlm.currentMinTemp = OBSERVING_MINIMUM_TEMP;
+            g_THERM_AppData.HkTlm.currentMaxTemp = OBSERVING_MAXIMUM_TEMP;
+            break;
     }
 }
 
-void THERM_ManageObservingTemperature(WISE_HkTlm_t *WISE_HkTelemetryPkt)
+void THERM_ManageTemperature(WISE_HkTlm_t *WISE_HkTelemetryPkt)
 {
-    if (WISE_HkTelemetryPkt->wiseTemp <= OBSERVING_MINIMUM_TEMP)
+    if (WISE_HkTelemetryPkt->wiseTemp <= g_THERM_AppData.HkTlm.currentMinTemp &&
+        g_THERM_AppData.HkTlm.wiseTempState != HEATING)
     {
         THERM_RaiseInstrumentTemperature(WISE_HkTelemetryPkt);
     } 
-    else if (WISE_HkTelemetryPkt->wiseTemp >= OBSERVING_MAXIMUM_TEMP)
+    else if (WISE_HkTelemetryPkt->wiseTemp >= g_THERM_AppData.HkTlm.currentMaxTemp &&
+             g_THERM_AppData.HkTlm.wiseTempState != COOLING)
     {
         THERM_LowerInstrumentTemperature(WISE_HkTelemetryPkt);
-    } 
+    }
 }
 
 void THERM_RaiseInstrumentTemperature(WISE_HkTlm_t *WISE_HkTelemetryPkt)
 {
+    uint16 target;
+    uint16 toggle;
     if (WISE_HkTelemetryPkt->wiseHtrA_State == WISE_HTR_OFF)
     {
-        g_THERM_AppData.WISE_outData.target = WISE_HTR_A;
-        CFE_SB_SetCmdCode((CFE_SB_Msg_t*)&g_THERM_AppData.WISE_outData, WISE_HTR_TOGGLE_CC);
+        target = WISE_HTR_A;
+        toggle = WISE_HTR_TOGGLE_CC;
     }
     else if (WISE_HkTelemetryPkt->wiseHtrB_State == WISE_HTR_OFF)
     {
-        g_THERM_AppData.WISE_outData.target = WISE_HTR_B;
-        CFE_SB_SetCmdCode((CFE_SB_Msg_t*)&g_THERM_AppData.WISE_outData, WISE_HTR_TOGGLE_CC);
+        target = WISE_HTR_B;
+        toggle = WISE_HTR_TOGGLE_CC;
     }
-    else if (WISE_HkTelemetryPkt->wiseLvrA_State == WISE_LVR_OPEN)
+    else if (
+        THERM_IsActiveCapacitorSufficient(WISE_HkTelemetryPkt) &&
+        WISE_HkTelemetryPkt->wiseLvrA_State == WISE_LVR_OPEN)
     {
-        g_THERM_AppData.WISE_outData.target = WISE_LVR_A;
-        CFE_SB_SetCmdCode((CFE_SB_Msg_t*)&g_THERM_AppData.WISE_outData, WISE_LVR_TOGGLE_CC);
+        target = WISE_LVR_A;
+        toggle = WISE_LVR_TOGGLE_CC;
     }
-    else if (WISE_HkTelemetryPkt->wiseLvrB_State == WISE_LVR_OPEN)
+    else if (
+        THERM_IsActiveCapacitorSufficient(WISE_HkTelemetryPkt) &&
+        WISE_HkTelemetryPkt->wiseLvrB_State == WISE_LVR_OPEN)
     {
-        g_THERM_AppData.WISE_outData.target = WISE_LVR_B;
-        CFE_SB_SetCmdCode((CFE_SB_Msg_t*)&g_THERM_AppData.WISE_outData, WISE_LVR_TOGGLE_CC);
+        target = WISE_LVR_B;
+        toggle = WISE_LVR_TOGGLE_CC;
+    }
+    else {
+        CFE_EVS_SendEvent(THERM_MSGID_ERR_EID, CFE_EVS_ERROR,
+            "THERM - All available temperature mitigations active. Current temperature: (%d)",
+            WISE_HkTelemetryPkt->wiseTemp);
+        return;
     }
 
+    g_THERM_AppData.HkTlm.waitTicks = WAIT_BETWEEN_ACTION;
+    g_THERM_AppData.WISE_outData.target = target;
+    CFE_SB_SetCmdCode((CFE_SB_Msg_t*)&g_THERM_AppData.WISE_outData, toggle);
     CFE_SB_SendMsg((CFE_SB_Msg_t*)&g_THERM_AppData.WISE_outData);
 }
 
 void THERM_LowerInstrumentTemperature(WISE_HkTlm_t *WISE_HkTelemetryPkt)
 {
+    uint8 target;
+    uint8 toggle;
     if (WISE_HkTelemetryPkt->wiseHtrA_State == WISE_HTR_ON)
     {
-        g_THERM_AppData.WISE_outData.target = WISE_HTR_A;
-        CFE_SB_SetCmdCode((CFE_SB_Msg_t*)&g_THERM_AppData.WISE_outData, WISE_HTR_TOGGLE_CC);
+        target = WISE_HTR_A;
+        toggle = WISE_HTR_TOGGLE_CC;
     }
-    else if (WISE_HkTelemetryPkt->wiseHtrA_State == WISE_HTR_ON)
+    else if (WISE_HkTelemetryPkt->wiseHtrB_State == WISE_HTR_ON)
     {
-        g_THERM_AppData.WISE_outData.target = WISE_HTR_B;
-        CFE_SB_SetCmdCode((CFE_SB_Msg_t*)&g_THERM_AppData.WISE_outData, WISE_HTR_TOGGLE_CC);
+        target = WISE_HTR_B;
+        toggle = WISE_HTR_TOGGLE_CC;
     }
-    else if (WISE_HkTelemetryPkt->wiseLvrA_State == WISE_LVR_CLOSED)
+    else if (
+        THERM_IsActiveCapacitorSufficient(WISE_HkTelemetryPkt) &&
+        WISE_HkTelemetryPkt->wiseLvrA_State == WISE_LVR_CLOSED)
     {
-        g_THERM_AppData.WISE_outData.target = WISE_LVR_A;
-        CFE_SB_SetCmdCode((CFE_SB_Msg_t*)&g_THERM_AppData.WISE_outData, WISE_LVR_TOGGLE_CC);
+        target = WISE_LVR_A;
+        toggle = WISE_LVR_TOGGLE_CC;
     }
-    else if (WISE_HkTelemetryPkt->wiseLvrB_State == WISE_LVR_CLOSED)
+    else if (
+        THERM_IsActiveCapacitorSufficient(WISE_HkTelemetryPkt) &&
+        WISE_HkTelemetryPkt->wiseLvrB_State == WISE_LVR_CLOSED)
     {
-        g_THERM_AppData.WISE_outData.target = WISE_LVR_B;
-        CFE_SB_SetCmdCode((CFE_SB_Msg_t*)&g_THERM_AppData.WISE_outData, WISE_LVR_TOGGLE_CC);
+        target = WISE_LVR_B;
+        toggle = WISE_LVR_TOGGLE_CC;
+    }
+    else {
+        CFE_EVS_SendEvent(THERM_MSGID_ERR_EID, CFE_EVS_ERROR,
+            "THERM - All available temperature mitigations active. Current temperature: (%d)",
+            WISE_HkTelemetryPkt->wiseTemp);
+        return;
     }
 
+    g_THERM_AppData.HkTlm.waitTicks = WAIT_BETWEEN_ACTION;
+    g_THERM_AppData.WISE_outData.target = target;
+    CFE_SB_SetCmdCode((CFE_SB_Msg_t*)&g_THERM_AppData.WISE_outData, toggle);
     CFE_SB_SendMsg((CFE_SB_Msg_t*)&g_THERM_AppData.WISE_outData);
+}
+
+int THERM_IsActiveCapacitorSufficient(WISE_HkTlm_t *WISE_HkTelemetryPkt)
+{
+    uint16 activeCapacitorCharge = 0;
+    switch(WISE_HkTelemetryPkt->wiseActiveCap)
+    {
+        case WISE_CAP_A:
+            activeCapacitorCharge = WISE_HkTelemetryPkt->wiseCapA_Charge;
+        case WISE_CAP_B:
+            activeCapacitorCharge = WISE_HkTelemetryPkt->wiseCapB_Charge;
+        case WISE_CAP_C:
+            activeCapacitorCharge = WISE_HkTelemetryPkt->wiseCapC_Charge;
+        default:
+            CFE_EVS_SendEvent(THERM_MSGID_ERR_EID, CFE_EVS_ERROR,
+                "THERM - Recvd invalid Active Capacitor. Id: (%d)",
+                WISE_HkTelemetryPkt->wiseActiveCap);
+
+        g_THERM_AppData.HkTlm.wiseActiveCapacitorCharge = activeCapacitorCharge;
+        return activeCapacitorCharge > 1;
+    }
 }
 
 /*=====================================================================================
