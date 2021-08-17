@@ -831,8 +831,6 @@ void WISE_ProcessNewAppCmds(CFE_SB_Msg_t* MsgPtr)
     if (MsgPtr != NULL)
     {
         uiCmdCode = CFE_SB_GetCmdCode(MsgPtr);
-		CFE_EVS_SendEvent(WISE_CMD_INF_EID, CFE_EVS_INFORMATION,
-                                  "WISE - Recvd NOOP cmd (%lu)", uiCmdCode);
         switch (uiCmdCode)
         {
             case WISE_NOOP_CC:
