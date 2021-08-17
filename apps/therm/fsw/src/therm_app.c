@@ -674,7 +674,7 @@ void THERM_ProcessNewData()
 ** Purpose: To process telemetry output data originating from WISE application
 **
 ** Arguments:
-**    CFE_SB_Msg_t*  TlmMsgPtr - new telemetry message pointer
+**    WISE_HkTlm_t* WISE_HkTelemetryPkt - WISE HK Telemetry output pointer
 **
 ** Returns:
 **    None
@@ -735,6 +735,43 @@ void THERM_ProcessWiseData(CFE_SB_Msg_t* TlmMsgPtr)
     }
 }
 
+/*=====================================================================================
+** Name: THERM_DetermineTemperatureState
+**
+** Purpose: Determine the current state of the temperature of the WISE instrument. State
+** in this case refers to whether the instrument is temperature is increasing (heating),
+** decreasing (cooling), or constant (stable). 
+**
+** Arguments:
+**    WISE_HkTlm_t* WISE_HkTelemetryPkt - WISE HK Telemetry output pointer
+**
+** Returns:
+**    None
+**
+** Routines Called:
+**    None
+**
+** Called By:
+**    THERM_ProcessWiseData(WISE_HkTlm_t *WISE_HkTelemetryPkt)
+**
+** Global Inputs/Reads:
+**    WISE_HkTelemetryPkt->wiseTemp
+**
+** Global Outputs/Writes:
+**     g_THERM_AppData.HkTlm.wiseTempState
+**     g_THERM_AppData.HkTlm.wisePrevTemp
+**
+** Algorithm:
+**    calculate the difference between the current wiseTemp and the previous wiseTemp
+**    negative -> cooling
+**    zero     -> stable
+**    positive -> heating
+**
+** Author(s):  Runtime Terror 
+**
+** History:  Date Written  2021-08-14
+**           Unit Tested   yyyy-mm-dd
+**=====================================================================================*/
 void THERM_DetermineTemperatureState(WISE_HkTlm_t *WISE_HkTelemetryPkt)
 {
     g_THERM_AppData.HkTlm.wiseTempChange = WISE_HkTelemetryPkt->wiseTemp - g_THERM_AppData.HkTlm.wisePrevTemp;
@@ -754,6 +791,40 @@ void THERM_DetermineTemperatureState(WISE_HkTlm_t *WISE_HkTelemetryPkt)
     g_THERM_AppData.HkTlm.wisePrevTemp = WISE_HkTelemetryPkt->wiseTemp;
 }
 
+/*=====================================================================================
+** Name: THERM_DetermineCurrentTempBounds
+**
+** Purpose: Determine the required temperature bounds that must be maintained based on
+**          the current WISE SBC state
+**
+** Arguments:
+**    WISE_HkTlm_t* WISE_HkTelemetryPkt - WISE HK Telemetry output pointer
+**
+** Returns:
+**    None
+**
+** Routines Called:
+**    None
+** Called By:
+**    THERM_ProcessWiseData(WISE_HkTlm_t *WISE_HkTelemetryPkt)
+**
+** Global Inputs/Reads:
+**    WISE_HkTelemetryPkt->wiseSbcState
+**
+** Global Outputs/Writes:
+**    g_THERM_AppData.HkTlm.currentMinTemp
+**    g_THERM_AppData.HkTlm.currentMaxTemp
+**
+** Algorithm:
+**    based on the current state of wiseSbcState, set min and max temp
+**    WISE_SBC_POWERED      -> POWERED MIN/MAX TEMP
+**    WISE_SBC_OBSERVING    -> OBSERVING MIN/MAX TEMP
+**
+** Author(s):  Runtime Terror 
+**
+** History:  Date Written  2021-08-14
+**           Unit Tested   yyyy-mm-dd
+**=====================================================================================*/
 void THERM_DetermineCurrentTempBounds(WISE_HkTlm_t *WISE_HkTelemetryPkt)
 {
     switch(WISE_HkTelemetryPkt->wiseSbcState)
@@ -769,6 +840,50 @@ void THERM_DetermineCurrentTempBounds(WISE_HkTlm_t *WISE_HkTelemetryPkt)
     }
 }
 
+/*=====================================================================================
+** Name: THERM_ManageTemperature
+**
+** Purpose: Manage the temperature of the WISE instrument based on current temperature,
+**          the state of the temperature of the system (heating, cooling, stable) 
+**
+** Arguments:
+**    WISE_HkTlm_t* WISE_HkTelemetryPkt - WISE HK Telemetry output pointer
+**
+** Returns:
+**    None
+**
+** Routines Called:
+**    THERM_RaiseInstrumentTemperature(WISE_HkTlm_t *WISE_HkTelemetryPkt)
+**    THERM_LowerInstrumentTemperature(WISE_HkTlm_t *WISE_HkTelemetryPkt)
+**
+** Called By:
+**    THERM_ProcessWiseData(WISE_HkTlm_t *WISE_HkTelemetryPkt)
+**
+** Global Inputs/Reads:
+**    g_THERM_AppData.HkTlm.currentMinTemp
+**    g_THERM_AppData.HkTlm.currentMaxTemp
+**    g_THERM_AppData.HkTlm.wiseTempState
+**    WISE_HkTelemetryPkt->wiseTemp
+**
+** Global Outputs/Writes:
+**    None
+**
+** Algorithm:
+**    if the system is below the minimum allowable temperature and the system is not
+**    currently heating, call routine to raise the instrument temperature
+**
+**    if the system is above the maximum allowable temperature and the system is not
+**    currently cooling, call routine to lower the instrument temperature
+**
+** ToDo:
+**    Implement algorithmic enhancement to try and neutralize the system temperature
+**    once the system reaches a certain temperature threshold (e.g. a safe 20 degrees)
+**
+** Author(s):  Runtime Terror 
+**
+** History:  Date Written  2021-08-14
+**           Unit Tested   yyyy-mm-dd
+**=====================================================================================*/
 void THERM_ManageTemperature(WISE_HkTlm_t *WISE_HkTelemetryPkt)
 {
     if (WISE_HkTelemetryPkt->wiseTemp <= g_THERM_AppData.HkTlm.currentMinTemp &&
@@ -783,6 +898,55 @@ void THERM_ManageTemperature(WISE_HkTlm_t *WISE_HkTelemetryPkt)
     }
 }
 
+/*=====================================================================================
+** Name: THERM_RaiseInstrumentTemperature
+**
+** Purpose: Raise the current system temperature by activating heaters or closing louvers
+**
+** Arguments:
+**    WISE_HkTlm_t* WISE_HkTelemetryPkt - WISE HK Telemetry output pointer
+**
+** Returns:
+**    None
+**
+** Routines Called:
+**    THERM_IsActiveCapacitorSufficient
+**    CFE_EVS_SendEvent
+**    CFE_SB_SetCmdCode
+**    CFE_SB_SendMsg
+**
+** Called By:
+**    THERM_ManageTemperature(WISE_HkTlm_t *WISE_HkTelemetryPkt)
+**
+** Global Inputs/Reads:
+**    WISE_HkTelemetryPkt->wiseHtrA_State
+**    WISE_HkTelemetryPkt->wiseHtrB_State
+**    WISE_HkTelemetryPkt->wiseLvrA_State
+**    WISE_HkTelemetryPkt->wiseLvrB_State
+**
+** Global Outputs/Writes:
+**    None
+**
+** Algorithm:
+**    First, look at heaters A and B, if either are turned off, turn one on. 
+**    If all heaters are currently active, then attempt to close one of the two louvers.
+**
+**    Note: A timer is set to skip the next {WAIT_BETWEEN_ACTIONS} actions in order to
+**          avoid a scenario we ran into while testing where the system lagged in actioning
+**          a heater/louver and as such the therm_app over reacted to change the temperature
+**
+**    Note: Louvers are temperamental and as such we want to minimize their usage as much
+**          as possible.
+**
+** ToDo:
+**    Implement stricter guardrails around when louvers will be activated, the chance of 
+**    damage is too high to justify their usage is the majority of instances.
+**
+** Author(s):  Runtime Terror 
+**
+** History:  Date Written  2021-08-14
+**           Unit Tested   yyyy-mm-dd
+**=====================================================================================*/
 void THERM_RaiseInstrumentTemperature(WISE_HkTlm_t *WISE_HkTelemetryPkt)
 {
     uint16 target;
@@ -824,6 +988,55 @@ void THERM_RaiseInstrumentTemperature(WISE_HkTlm_t *WISE_HkTelemetryPkt)
     CFE_SB_SendMsg((CFE_SB_Msg_t*)&g_THERM_AppData.WISE_outData);
 }
 
+/*=====================================================================================
+** Name: THERM_LowerInstrumentTemperature
+**
+** Purpose: Lower the current system temperature by turning off heaters or opening louvers
+**
+** Arguments:
+**    WISE_HkTlm_t* WISE_HkTelemetryPkt - WISE HK Telemetry output pointer
+**
+** Returns:
+**    None
+**
+** Routines Called:
+**    THERM_IsActiveCapacitorSufficient
+**    CFE_EVS_SendEvent
+**    CFE_SB_SetCmdCode
+**    CFE_SB_SendMsg
+**
+** Called By:
+**    THERM_ManageTemperature(WISE_HkTlm_t *WISE_HkTelemetryPkt)
+**
+** Global Inputs/Reads:
+**    WISE_HkTelemetryPkt->wiseHtrA_State
+**    WISE_HkTelemetryPkt->wiseHtrB_State
+**    WISE_HkTelemetryPkt->wiseLvrA_State
+**    WISE_HkTelemetryPkt->wiseLvrB_State
+**
+** Global Outputs/Writes:
+**    None
+**
+** Algorithm:
+**    First, look at heaters A and B, if either are turned on, turn one off. 
+**    If all heaters are currently inactive, then attempt to open one of the two louvers.
+**
+**    Note: A timer is set to skip the next {WAIT_BETWEEN_ACTIONS} actions in order to
+**          avoid a scenario we ran into while testing where the system lagged in actioning
+**          a heater/louver and as such the therm_app over reacted to change the temperature
+**
+**    Note: Louvers are temperamental and as such we want to minimize their usage as much
+**          as possible.
+**
+** ToDo:
+**    Implement stricter guardrails around when louvers will be activated, the chance of 
+**    damage is too high to justify their usage is the majority of instances.
+**
+** Author(s):  Runtime Terror 
+**
+** History:  Date Written  2021-08-14
+**           Unit Tested   yyyy-mm-dd
+**=====================================================================================*/
 void THERM_LowerInstrumentTemperature(WISE_HkTlm_t *WISE_HkTelemetryPkt)
 {
     uint8 target;
@@ -865,6 +1078,44 @@ void THERM_LowerInstrumentTemperature(WISE_HkTlm_t *WISE_HkTelemetryPkt)
     CFE_SB_SendMsg((CFE_SB_Msg_t*)&g_THERM_AppData.WISE_outData);
 }
 
+/*=====================================================================================
+** Name: THERM_IsActiveCapacitorSufficient
+**
+** Purpose: Calculate the charge of the active WISE capactior and determine whether it is
+**          sufficient to action on a lovuer.
+**
+** Arguments:
+**    WISE_HkTlm_t* WISE_HkTelemetryPkt - WISE HK Telemetry output pointer
+**
+** Returns:
+**    int - is capactior charge sufficient?
+**        (0) - charge is insufficient
+**        (1) - charge is sufficient
+**
+** Routines Called:
+**    CFE_EVS_SendEvent
+**
+** Called By:
+**    THERM_RaiseInstrumentTemperature(WISE_HkTlm_t *WISE_HkTelemetryPkt)
+**    THERM_LowerInstrumentTemperature(WISE_HkTlm_t *WISE_HkTelemetryPkt)
+**
+** Global Inputs/Reads:
+**    WISE_HkTelemetryPkt->wiseActiveCa
+**    WISE_HkTelemetryPkt->wiseCapA_Charge
+**    WISE_HkTelemetryPkt->wiseCapB_Charge
+**    WISE_HkTelemetryPkt->wiseCapC_Charge
+**
+** Global Outputs/Writes:
+**    g_THERM_AppData.HkTlm.wiseActiveCapacitorCharge
+**
+** Algorithm:
+**    Based on the active capacitor, check for the current charge present in that capacitor
+**
+** Author(s):  Runtime Terror 
+**
+** History:  Date Written  2021-08-14
+**           Unit Tested   yyyy-mm-dd
+**=====================================================================================*/
 int THERM_IsActiveCapacitorSufficient(WISE_HkTlm_t *WISE_HkTelemetryPkt)
 {
     uint16 activeCapacitorCharge = 0;
